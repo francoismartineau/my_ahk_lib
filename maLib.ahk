@@ -534,6 +534,25 @@ SysCommand(vTarget, vSize:="")
 	return vStdOut
 }
 
+soundNumInDir(dir)
+{
+    dirSplit := StrSplit(dir)
+    if (dirSplit[dirSplit.MaxIndex()] != "\")
+        dir := dir "\"
+
+    extensions := ["wav", "wv", "mp3", "aif", "aiff", "ogg"]
+    num := 0
+    Loop, %dir%*.*
+    {
+        splitName := StrSplit(A_LoopFileName, ".")
+        currExt := splitName[splitName.MaxIndex()]
+        StringLower, currExt, currExt
+        if (hasVal(extensions, currExt))
+            num := num + 1
+    }
+    return num
+}
+
 fileNumInDir(dir)
 {
     dirSplit := StrSplit(dir)
@@ -815,7 +834,8 @@ timeOfDaySeconds()
 }
 
 
-TypeText(txt) {
+TypeText(txt)
+{
     prevClipboard := clipboard
     clipboard := txt
     Send {CtrlDown}v{CtrlUp}
@@ -823,7 +843,8 @@ TypeText(txt) {
 }
 
 ; check if element is in list
-hasVal(haystack, needle) {
+hasVal(haystack, needle)
+{
 	if !(IsObject(haystack)) || (haystack.Length() = 0)
 		return 0
 	for index, value in haystack
@@ -833,12 +854,14 @@ hasVal(haystack, needle) {
 }
 
 ; cut at index until end of list
-cutEndOfList(list, index) {
+cutEndOfList(list, index)
+{
     list.RemoveAt(index , list.MaxIndex() - index)
     return list
 }
 
-keyDown(key) {
+keyDown(key)
+{
     return GetKeyState(key , "P")
 }
 
@@ -847,5 +870,19 @@ windowSpy()
 	wp = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\AutoHotkey\Active Window Info (Window Spy).lnk"
 	SysCommand(wp)
 }
+
+sendAllKeysUp()
+{
+    toolTip("Release keys")
+    Loop, 0xFF
+    {
+        Key := Format("VK{:02X}",A_Index)
+        IF GetKeyState(Key)
+            Send, {%Key% Up}
+    }
+    Sleep, 400
+    toolTip()
+}
+
 
 ; ----
