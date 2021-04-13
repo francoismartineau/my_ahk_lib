@@ -834,7 +834,7 @@ timeOfDaySeconds()
 }
 
 
-TypeText(txt)
+typeText(txt)
 {
     prevClipboard := clipboard
     clipboard := txt
@@ -842,13 +842,18 @@ TypeText(txt)
     clipboard := prevClipboard
 }
 
+removeBreakLines(text)
+{
+    return RegExReplace(text,"\.? *(\n|\r)+","")
+}
+
 ; check if element is in list
 hasVal(haystack, needle)
 {
-	if !(IsObject(haystack)) || (haystack.Length() = 0)
+	if !(IsObject(haystack)) || (haystack.Length() == 0)
 		return 0
 	for index, value in haystack
-		if (value = needle)
+		if (value == needle)
 			return index
 	return 0
 }
@@ -884,5 +889,15 @@ sendAllKeysUp()
     toolTip()
 }
 
+winIdAtCoords(x, y)         ; not totally reliable
+{
+    return DllCall("GetAncestor", UInt, DllCall("WindowFromPoint", Int, x, Int, y), UInt, GA_ROOT := 2)
+}
+
+keyIsDown(key)
+{
+    GetKeyState, ks, %key%
+    return ks == "D"
+}
 
 ; ----
