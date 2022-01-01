@@ -1,8 +1,12 @@
-; -- Math ---------------------------------------------------------
+#Include %A_MyDocuments%/AutoHotkey/Lib/wait.ahk
+#Include %A_MyDocuments%/AutoHotkey/Lib/mouseClipboard.ahk
+
+; -- Math ---------------------------------------------------------------------------------------------------------------------------------------
 epsilon := 2.71828182845905
 
 
-Pow(a, x) {
+Pow(a, x)
+{
     return Exp(x * Ln(a))
 }
 
@@ -29,7 +33,7 @@ LogarithmicToLinear(val) {
 ; ----
 
 
-; -- Variables File Dumping ----------------------------------
+; -- Variables File Dumping -----------------------------------------------------------------------------------------------------------------------
 global arrayStartSep := "[    "
 global arrayEndSep := "    ]"
 global dictStartSep := "{    "
@@ -41,11 +45,13 @@ global dumpSepLen := StrLen(objectIndexSep)
 dumpToFile(val, path, section, name)
 {
     dumpableVal := valToDumpableVal(val)
+    FileEncoding, UTF-16
     IniWrite, %dumpableVal%, %path%, %section%, %name%
 }
 
 loadDumpedToFile(path, section, name)
 {
+    FileEncoding, UTF-16
     IniRead, dumpedVal, %path%, %section%, %name%
     return dumpedValToVal(dumpedVal)
 }
@@ -272,7 +278,7 @@ everySepIsClosed(str)
 
 
 
-; ------ RANDOMS --------------------------------------------
+; ------ RANDOMS -------------------------------------------------------------------------------------------------------------------------------
 ;offset: values close to 0 drag the exepcted result closer to min
 RandomLog(min, max, offset := .1) {
     r_min := LogarithmicToLinear(offset)
@@ -283,7 +289,7 @@ RandomLog(min, max, offset := .1) {
     return r
 }
                                                 ; c =.1: far from center
-centeredExpRand(min, max, c = 1, center = "")   ; c = 5: close
+centeredExpRand(min, max, c := 1, center := "")   ; c = 5: close
 {                                               ; c = 1: normal
     if (center == "")
         center := (max-min)/2
@@ -295,15 +301,32 @@ centeredExpRand(min, max, c = 1, center = "")   ; c = 5: close
 }
 
                                                 ; c =.1: close to max
-expRand(min, max, c = 1)                        ; c = 5: close to min
+expRand(min, max, c := 1)                        ; c = 5: close to min
 {        
     Random, n, 0.0, 1.0
     res :=  min + (max-min)*Pow(n, c)
     return res
 }
 
+; standardDeviation: 0.01 dévie du centre très peu
+;                     1 bcp
+randGaussian(standardDeviation := .02, offset := .5)
+{
+	max_random := 10000000
+	Random, r1, 1, max_random ; 1 to prevent inf error
+	Random, r2, 1, max_random
+	res := offset + standardDeviation * Sqrt(-2 * Ln(r1 / max_random)) * Cos(2 * 3.14159265 * (r2 / max_random))
+    return res
+}
+
 randInt(min, max)
 {
+    if (max < min)
+    {
+        maxSave := max
+        max := min
+        min := maxSave
+    }
     Random, r, %min%, %max%
     return r
 }
@@ -389,13 +412,13 @@ randomizeStringOrder(string)
     return newString
 }
 
-randString(len)
+randString(len, max := 255, min := 1)
 {
    CharStr := ""
    Loop % len
    {
         c := exprand(0.00001, .4, 0.1)
-        r := Floor(expRand(1, 255, c))
+        r := Floor(expRand(min, max, c))
         if (oneChanceOver(3, "invert"))
             r := Floor(r / 3)
 
@@ -505,7 +528,7 @@ isRomanNum(n)
 ; ----
 
 
-; -- System --------------------------------
+; -- System ----------------------------------------------------------------------------------------------------------------------------------
 HideTaskbar(action)
 {
     static ABM_SETSTATE := 0xA, ABS_AUTOHIDE := 0x1, ABS_ALWAYSONTOP := 0x2
@@ -515,7 +538,7 @@ HideTaskbar(action)
     DllCall("Shell32\SHAppBarMessage", UInt, ABM_SETSTATE, Ptr, &APPBARDATA)
 }
 
-SysCommand(vTarget, vSize:="")
+SysCommand(vTarget, removeNewLines := False)
 {
 	DetectHiddenWindows, On
 	vComSpec := A_ComSpec ? A_ComSpec : ComSpec
@@ -525,12 +548,14 @@ SysCommand(vTarget, vSize:="")
 	oShell := ComObjCreate("WScript.Shell")
 	oExec := oShell.Exec(vTarget)
 	vStdOut := ""
-	if !(vSize = "")
-		VarSetCapacity(vStdOut, vSize)
+	;if !(vSize = "")                           ; vSize := "" was the 2nd arg
+    ;		VarSetCapacity(vStdOut, vSize)
 	while !oExec.StdOut.AtEndOfStream
 		vStdOut := oExec.StdOut.ReadAll()
 	DllCall("kernel32\FreeConsole")
 	Process, Close, % vPID
+    if (removeNewLines)
+        vStdOut := removeBreakLines(vStdOut)
 	return vStdOut
 }
 
@@ -553,6 +578,16 @@ soundNumInDir(dir)
     return num
 }
 
+folderNumInDir(dir)
+{
+    num := 0
+    Loop, %Dir%\*.*, 2, 0
+    {
+        num := A_index
+    }
+    return num
+}
+
 fileNumInDir(dir)
 {
     dirSplit := StrSplit(dir)
@@ -563,44 +598,86 @@ fileNumInDir(dir)
         Number := A_Index
     return Number
 }
+
+browseFolder(dir)
+{
+    ; if a file is given, its folder will be opened
+    if (FileExist(dir) != "D")
+       SplitPath, dir,, dir
+    if (FileExist(dir) == "D")
+        SysCommand(A_MyDocuments "\AutoHotkey\Lib\browseFolder.bat """ dir """")
+}
 ; ----
 
 
 
-; -- Messages ------------------------------
-msgBox(msg = "")
+; -- Messages --------------------------------------------------------------------------------------------------------------------------------
+global tempMsgToolTipIndex := 20
+global otherTempMsgToolTipIndexes := []
+tempMsg(msg := "", maxMs := 1000, x := "", y := "", toolTipIndex := "")
+{
+    if (!IsLabel("TEMP_MSG"))
+    {
+        msg("You must #Include .../Lib/libGoTo.ahk at end of script")
+        return
+    }
+    stopTempMsg()
+    if (toolTipIndex == "")
+        toolTipIndex := tempMsgToolTipIndex
+    else
+        otherTempMsgToolTipIndexes.Push(toolTipIndex)
+    toolTip(msg, toolTipIndex, x, y)
+    SetTimer, TEMP_MSG, %maxMs%
+}
+stopTempMsg()
+{
+    SetTimer, TEMP_MSG, Off
+    toolTip("", tempMsgToolTipIndex)
+    for _, toolTipIndex in otherTempMsgToolTipIndexes
+        toolTip("", toolTipIndex)
+    otherTempMsgToolTipIndexes := []
+}
+
+msgBox(msg := "", title := " ")
 {
     msg := objToString(msg)
-    MsgBox %msg%
+    MsgBox,, %title%, %msg%
     WinGet, exe, ProcessName, A
     if (exe != "FL64.exe") {
         WinActivate, ahk_exe FL64.exe
     }
 }
 
-msgTip(msg, t = 1000, n = 1)
+msgTip(msg, t := 1000, n := 1)
 {
     msg := objToString(msg)
+    if (!msg)
+        msg := " "
     ToolTip %msg%,,, %n%
     Sleep, %t%
     ToolTip,,,, %n%
 }
 
-msg(msg, t = 1000, n = 1)
+msg(msg, t := 1000, n := 1)
 {
     msgTip(msg, t, n)
 }
 
-logVar(var, t = 1000, n = 1)    ; var should be the name of the variable in a string
+msgVar(var, val, t := 1000, n := 1)    ; var should be the name of the variable in a string
 {
-    val := %var%
+    ;val := %var%       ; wouldn't work because var is not local?
     msg(var ": " val)
 }
 
-toolTip(msg = "", n = 1)
+toolTip(msg := "", n := 1, x := "", y := "", coordMode := "Client")
 {
+    prevMode := setToolTipCoordMode(coordMode)
     msg := objToString(msg)
-    ToolTip, %msg%,,, %n%
+    if (x != "" and y != "")
+        ToolTip, %msg%, %x%, %y%, %n%
+    else
+        ToolTip, %msg%,,, %n%
+    setToolTipCoordMode(prevMode)
 }
 
 objToString(obj, tabs = 0)
@@ -639,9 +716,51 @@ debug(msg = "")
     }
 }
 
+CoordMode, Pixel, Client
+global pixelCoordMode := "Client"
+global prevPixelCoordMode :=
+setPixelCoordMode(mode)
+{
+    prevMode := pixelCoordMode
+    pixelCoordMode := mode
+    CoordMode, Pixel, %mode%
+    return prevMode
+}
+
+CoordMode, Mouse, Client
+global mouseCoordMode := "Client"
+global prevMouseCoordMode :=
+setMouseCoordMode(mode)
+{
+    prevMode := mouseCoordMode
+    mouseCoordMode := mode
+    CoordMode, Mouse, %mode%
+    return prevMode
+}
+
+CoordMode, ToolTip, Client
+global toolTipCoordMode := "Client"
+global prevToolTipCoordMode :=
+setToolTipCoordMode(mode)
+{
+    prevMode := toolTipCoordMode
+    toolTipCoordMode := mode
+    CoordMode, ToolTip, %mode%
+    return prevMode
+}
+
+resetCoordModes()
+{
+    if (prevPixelCoordMode)
+        setPixelCoordMode(prevPixelCoordMode)
+    if (prevMouseCoordMode)
+        setMouseCoordMode(prevMouseCoordMode)
+    if (prevToolTipCoordMode)
+        setToolTipCoordMode(prevToolTipCoordMode)
+}
 
 
-; -- ToolTipOpt v1.004 --------------------------------------------------------------------
+; -- ToolTipOpt v1.004 ---------------------------------------------------------------------------------------------------------------------
 ; Changes:
 ;  v1.001 - Pass "Default" to restore a setting to default
 ;  v1.002 - ANSI compatibility
@@ -821,10 +940,47 @@ hexColorVariation(h1, h2)
     diff := Max(diff, diffG)
     return diff
 }
+
+invertColor(col)
+{
+    res := hex2Rgb(col)
+    r := res[1]
+    g := res[2]
+    b := res[3]
+
+    r := 0xFF - r
+    g := 0xFF - g
+    b := 0xFF - b
+    res := decimal2hex(r, 4) + decimal2hex(g, 2) + decimal2hex(b)
+    return res
+}
 ; ----
 
 
+; -------------------------------------------------------------------------------------------------------------------------------------------
+; -------------------------------------------------------------------------------------------------------------------------------------------
 ; -- Other --------------------
+range(n)
+{
+    if (n > 0)
+    {
+        res := []
+        Loop %n%
+            res.Push(A_Index)
+    }
+    return res
+}
+
+execFunc(f, params*)
+{
+    res := 
+    if (params.Length())
+        res := %f%(params*)
+    else 
+        res := %f%()
+    return res
+}
+
 timeOfDaySeconds()
 {
     FormatTime, vDate,, HH:mm:ss
@@ -833,12 +989,30 @@ timeOfDaySeconds()
     return vSec
 }
 
+copyTextWithClipboard()
+{
+    res := ""
+    prevClipboard := clipboard
+    clipboard := ""
+    Sleep, 10
+    SendInput ^c
+    Sleep, 10
+    ClipWait, 2
+    if ErrorLevel
+        msg("couldn't copyTextWithClipboard()")
+    else
+        res := clipboard
+    clipboard := prevClipboard
+    return res
+}
 
 typeText(txt)
 {
     prevClipboard := clipboard
     clipboard := txt
-    Send {CtrlDown}v{CtrlUp}
+    Sleep, 10
+    SendInput ^v
+    Sleep, 10
     clipboard := prevClipboard
 }
 
@@ -847,7 +1021,7 @@ removeBreakLines(text)
     return RegExReplace(text,"\.? *(\n|\r)+","")
 }
 
-; check if element is in list
+; check if element is in array
 hasVal(haystack, needle)
 {
 	if !(IsObject(haystack)) || (haystack.Length() == 0)
@@ -856,6 +1030,15 @@ hasVal(haystack, needle)
 		if (value == needle)
 			return index
 	return 0
+}
+
+; slice array from a to optional b
+slice(arr, a, b := "")
+{
+	local
+	return (ret := arr.clone()
+	, (b != "" && b < max := arr.maxindex()) ? 	ret.delete(b + 1, max) : ""
+	, ret.removeat(min := arr.minindex(), a - min) )
 }
 
 ; cut at index until end of list
@@ -900,4 +1083,132 @@ keyIsDown(key)
     return ks == "D"
 }
 
+mouseGetPos(ByRef mX, ByRef mY,  mode := "Client")
+{
+    prevMode := setMouseCoordMode(mode)
+    MouseGetPos, mX, mY, winId
+    setMouseCoordMode(prevMode)
+    return winId
+}
+
+moveMouse(x := "", y := "", mode := "Client", speed := 0)
+{
+    CoordMode, Mouse, Screen
+    static := betweenScreensX := 0
+    static := betweenScreensY := 870
+
+    if (x == "")
+        MouseGetPos, x
+    else if (y == "")
+        MouseGetPos,, y
+
+    if (mode == "Client")
+    {
+        WinGetPos, winX, winY,,, A
+        x := winX + x
+        y := winY + y
+    }
+
+    MouseGetPos, mx
+    crossScreen := (mx < 0 and x > 0) or (x < 0 and mx > 0)
+    if (crossScreen)
+    {
+        MouseMove, %betweenScreensX%, %betweenScreensY%, %speed%
+        MouseMove, %x%, %betweenScreensY%, %speed%
+    }
+
+    MouseMove, %x%, %y%, %speed%
+
+    CoordMode, Mouse, Client
+}
+
+startObsProjection()
+{
+    WinGet, obsId, ID, ahk_exe obs64.exe
+    if (obsId == "")
+        obsId := runObs()
+
+    if (obsId)
+    {
+        WinActivate, ahk_id %obsId%
+        WinMove, ahk_id %obsId%,, -1928, 560, 1936, 1096
+        WinMaximize, ahk_id %obsId%
+        moveMouse(433, 901)
+        Send {RButton}
+        Sleep, 500
+        moveMouse(552, 772)
+        Sleep, 500
+        Click
+        moveMouse(811, 774)
+        Sleep, 500
+        Click
+    }
+}
+
+runObs()
+{
+    Sleep, 200
+    Send {LWin}
+    Sleep, 600
+    Send obs
+    Sleep, 500
+    WinGet, currWinId, ID, A
+    Send {Enter}
+    obsId :=  waitNewWindowOfClass("Qt5152QWindowIcon", currWinId)
+    return obsId
+}
+
+startAhkImage()
+{
+    ;;;;;;;;;;
+}
+
+deepCopy(obj)
+{
+    if (IsObject(obj))
+    {
+        res := {}
+        for key, val in obj
+            res[key] := val
+    }
+    else
+        res := obj
+    return res
+}
+
+alwaysOnTop(winId)
+{
+    return
+    WinSet, AlwaysOnTop, On, ahk_id %winId%
+}
+; ----
+
+
+; ---- Mouse ---------------------------------------
+global savedMouseX
+global savedMouseY
+saveMousePos()
+{
+    CoordMode, Mouse, Screen
+    MouseGetPos, savedMouseX, savedMouseY
+    CoordMode, Mouse, Client
+}
+
+retrieveMousePos()
+{
+    global savedMouseX, savedMouseY
+    CoordMode, Mouse, Screen
+    MouseMove, savedMouseX, savedMouseY, 0
+    CoordMode, Mouse, Client
+}
+
+unfreezeMouse()
+{
+    BlockInput, MouseMoveOff
+}
+
+freezeMouse()
+{
+    BlockInput, MouseMove
+}
 ; ----
