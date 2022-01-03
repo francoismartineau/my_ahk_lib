@@ -1,3 +1,4 @@
+#Include %A_MyDocuments%/AutoHotkey/Lib/Paths.ahk
 #Include %A_MyDocuments%/AutoHotkey/Lib/wait.ahk
 #Include %A_MyDocuments%/AutoHotkey/Lib/mouseClipboard.ahk
 
@@ -612,30 +613,30 @@ browseFolder(dir)
 
 
 ; -- Messages --------------------------------------------------------------------------------------------------------------------------------
-global tempMsgToolTipIndex := 20
-global otherTempMsgToolTipIndexes := []
-tempMsg(msg := "", maxMs := 1000, x := "", y := "", toolTipIndex := "")
+global defautlTempMsgToolTipIndex := 20
+tempMsg(msg := "", maxMs := 1000, x := "", y := "", ttIndex := "")
 {
-    if (!IsLabel("TEMP_MSG"))
+    if (ttIndex == "")
+        ttIndex := defautlTempMsgToolTipIndex
+
+    if (ttIndex < 1 or ttIndex > 20)
+    {
+        msg("ToolTip Index must be between 1 and 20")
+        return
+    }
+    else if (!IsLabel("TEMP_MSG" ttIndex))
     {
         msg("You must #Include .../Lib/libGoTo.ahk at end of script")
         return
     }
-    stopTempMsg()
-    if (toolTipIndex == "")
-        toolTipIndex := tempMsgToolTipIndex
-    else
-        otherTempMsgToolTipIndexes.Push(toolTipIndex)
-    toolTip(msg, toolTipIndex, x, y)
-    SetTimer, TEMP_MSG, %maxMs%
+    stopTempMsg(ttIndex)
+    toolTip(msg, ttIndex, x, y)
+    SetTimer, TEMP_MSG%ttIndex%, %maxMs%
 }
-stopTempMsg()
+stopTempMsg(ttIndex := "")
 {
-    SetTimer, TEMP_MSG, Off
-    toolTip("", tempMsgToolTipIndex)
-    for _, toolTipIndex in otherTempMsgToolTipIndexes
-        toolTip("", toolTipIndex)
-    otherTempMsgToolTipIndexes := []
+    SetTimer, TEMP_MSG%ttIndex%, Off
+    toolTip("", ttIndex)
 }
 
 msgBox(msg := "", title := " ")
@@ -680,7 +681,7 @@ toolTip(msg := "", n := 1, x := "", y := "", coordMode := "Client")
     setToolTipCoordMode(prevMode)
 }
 
-objToString(obj, tabs = 0)
+objToString(obj, tabs := 0)
 {
     if (IsObject(obj))
     {
@@ -1055,8 +1056,7 @@ keyDown(key)
 
 windowSpy()
 {
-	wp = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\AutoHotkey\Active Window Info (Window Spy).lnk"
-	SysCommand(wp)
+	SysCommand(windowSpyPath)
 }
 
 sendAllKeysUp()
